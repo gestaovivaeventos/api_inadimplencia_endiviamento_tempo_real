@@ -49,22 +49,10 @@ def obter_dados(limit: int = 5000, offset: int = 0):
 	-- 1. BASE DE FUNDOS
 	cte_fundos AS (
 		SELECT
-			f.id,
-			f.nm_fundo,
-			f.curso_id,
-			f.unidade_id,
-			f.consultorplanejamento_id,
-			f.consultoratendimento_id,
-			f.consultorproducao_id,
-			f.tp_curso,
-			f.tp_servico,
-			f.situacao,
-			f.tipocliente_id,
-			f.vl_orcamento_contrato,
-			f.maf_replanejado,
-			f.dt_contrato,
-			f.dt_cadastro,
-			f.dt_baile
+			f.id, f.nm_fundo, f.curso_id, f.unidade_id, f.consultorplanejamento_id,
+			f.consultoratendimento_id, f.consultorproducao_id, f.tp_curso, f.tp_servico,
+			f.situacao, f.tipocliente_id, f.vl_orcamento_contrato, f.maf_replanejado,
+			f.dt_contrato, f.dt_cadastro, f.dt_baile
 		FROM
 			tb_fundo f
 			JOIN tb_unidade u ON u.id = f.unidade_id
@@ -77,10 +65,7 @@ def obter_dados(limit: int = 5000, offset: int = 0):
 	-- 2. INTEGRANTES BASE
 	cte_integrantes AS (
 		SELECT
-			i.id AS id_integrante,
-			i.fundo_id,
-			i.nu_status,
-			i.fl_ativo
+			i.id AS id_integrante, i.fundo_id, i.nu_status, i.fl_ativo
 		FROM
 			tb_integrante i
 			INNER JOIN cte_fundos cf ON i.fundo_id = cf.id
@@ -92,68 +77,43 @@ def obter_dados(limit: int = 5000, offset: int = 0):
 			SUM(
 				CASE
 					WHEN o.dt_liquidacao IS NULL
-					AND (
-						o.vl_pago = 0
-						OR o.vl_pago IS NULL
-					)
+					AND (o.vl_pago = 0 OR o.vl_pago IS NULL)
 					AND o.dt_vencimento < (CURRENT_DATE - 30)
-					AND o.ds_mensagem !~~* '%Especial%'
-					AND o.ds_mensagem !~~* '%Convite extra%' THEN COALESCE(o.vl_ordem, 0)
+					AND o.ds_mensagem !~~* '%%Especial%%'
+					AND o.ds_mensagem !~~* '%%Convite extra%%' THEN COALESCE(o.vl_ordem, 0)
 					ELSE 0
 				END
 			) AS val_inadimplencia,
 			MAX(
 				CASE
 					WHEN o.dt_liquidacao IS NULL
-					AND (
-						o.vl_pago = 0
-						OR o.vl_pago IS NULL
-					)
+					AND (o.vl_pago = 0 OR o.vl_pago IS NULL)
 					AND o.dt_vencimento < (CURRENT_DATE - 30)
-					AND o.ds_mensagem !~~* '%Especial%'
-					AND o.ds_mensagem !~~* '%Convite extra%' THEN 1
+					AND o.ds_mensagem !~~* '%%Especial%%'
+					AND o.ds_mensagem !~~* '%%Convite extra%%' THEN 1
 					ELSE 0
 				END
 			) AS flag_inadimplente,
 			SUM(
 				CASE
 					WHEN o.dt_liquidacao IS NOT NULL
-					AND (
-						o.vl_pago > 0
-						OR o.vl_pago IS NOT NULL
-					)
-					AND o.ds_mensagem !~~* '%Especial%'
-					AND o.ds_mensagem !~~* '%Convite extra%' THEN o.vl_ordem
+					AND (o.vl_pago > 0 OR o.vl_pago IS NOT NULL)
+					AND o.ds_mensagem !~~* '%%Especial%%'
+					AND o.ds_mensagem !~~* '%%Convite extra%%' THEN o.vl_ordem
 					ELSE 0
 				END
 			) AS val_pagos,
-			SUM(
-				CASE
-					WHEN o.vl_pago > 0 THEN 1
-					ELSE 0
-				END
-			) AS qtde_pagos_q3,
-			MAX(
-				CASE
-					WHEN o.dt_vencimento < (CURRENT_DATE - 30) THEN 1
-					ELSE 0
-				END
-			) AS flag_vencido_30d_q3,
+			SUM(CASE WHEN o.vl_pago > 0 THEN 1 ELSE 0 END) AS qtde_pagos_q3,
+			MAX(CASE WHEN o.dt_vencimento < (CURRENT_DATE - 30) THEN 1 ELSE 0 END) AS flag_vencido_30d_q3,
 			SUM(
 				CASE
 					WHEN o.vl_pago > 0
-					AND o.ds_mensagem !~~* '%Especial%'
-					AND o.ds_mensagem !~~* '%Convite extra%' THEN 1
+					AND o.ds_mensagem !~~* '%%Especial%%'
+					AND o.ds_mensagem !~~* '%%Convite extra%%' THEN 1
 					ELSE 0
 				END
 			) AS qtde_pagos_q7,
-			MAX(
-				CASE
-					WHEN o.dt_vencimento < (CURRENT_DATE - 30)
-					AND o.vl_pago IS NULL THEN 1
-					ELSE 0
-				END
-			) AS flag_vencido_30d_q7,
+			MAX(CASE WHEN o.dt_vencimento < (CURRENT_DATE - 30) AND o.vl_pago IS NULL THEN 1 ELSE 0 END) AS flag_vencido_30d_q7,
 			SUM(COALESCE(o.vl_ordem, 0)) AS val_total_ordens
 		FROM
 			tb_ordem o
@@ -182,66 +142,16 @@ def obter_dados(limit: int = 5000, offset: int = 0):
 	cte_metricas AS (
 		SELECT
 			ci.fundo_id,
-			COUNT(ci.id_integrante) FILTER (
-				WHERE
-					ci.fl_ativo IS TRUE
-					AND ci.nu_status NOT IN (11, 9, 8, 13)
-			) AS integrantes_ativos,
-			SUM(ord.val_inadimplencia) FILTER (
-				WHERE
-					ci.fl_ativo IS TRUE
-					AND ci.nu_status NOT IN (11, 9, 8, 13, 15)
-			) AS total_inadimplencia,
-			COUNT(ci.id_integrante) FILTER (
-				WHERE
-					ci.fl_ativo IS TRUE
-					AND ci.nu_status NOT IN (11, 9, 8, 13, 15)
-					AND ord.flag_inadimplente = 1
-			) AS total_inadimplentes,
-			SUM(ord.val_pagos) FILTER (
-				WHERE
-					ci.nu_status NOT IN (11, 9, 8, 13)
-			) AS tt_pagos,
-			COUNT(ci.id_integrante) FILTER (
-				WHERE
-					ci.fl_ativo IS TRUE
-					AND ci.nu_status NOT IN (10, 11, 9, 8, 13, 14)
-					AND ord.qtde_pagos_q3 = 0
-					AND ord.flag_vencido_30d_q3 = 1
-			) AS nunca_pagaram,
-			SUM(ord.val_total_ordens) FILTER (
-				WHERE
-					ci.fl_ativo IS TRUE
-					AND ci.nu_status NOT IN (10, 11, 9, 8, 13, 14)
-					AND ord.qtde_pagos_q3 = 0
-					AND ord.flag_vencido_30d_q3 = 1
-			) AS vl_nunca_pagaram,
-			SUM(fin.total_deb_futuros) FILTER (
-				WHERE
-					ci.fl_ativo IS TRUE
-					AND ci.nu_status NOT IN (11, 9, 8, 13)
-			) AS parc_deb_futuros,
-			COUNT(ci.id_integrante) FILTER (
-				WHERE
-					ci.fl_ativo IS TRUE
-					AND ci.nu_status NOT IN (11, 9, 8, 13)
-					AND fin.total_deb_futuros > 0
-			) AS integrantes_endividados,
-			SUM(fin.total_deb_futuros) FILTER (
-				WHERE
-					ci.fl_ativo IS TRUE
-					AND ci.nu_status NOT IN (11, 9, 8, 13, 15)
-					AND ord.qtde_pagos_q7 = 0
-					AND ord.flag_vencido_30d_q7 = 1
-			) AS end_nuca_pagaram,
-			COUNT(ci.id_integrante) FILTER (
-				WHERE
-					ci.fl_ativo IS TRUE
-					AND ci.nu_status NOT IN (11, 9, 8, 13, 15)
-					AND ord.qtde_pagos_q7 = 0
-					AND ord.flag_vencido_30d_q7 = 1
-					AND fin.total_deb_futuros > 0
-			) AS deb_nunca_pagaram
+			COUNT(ci.id_integrante) FILTER (WHERE ci.fl_ativo IS TRUE AND ci.nu_status NOT IN (11, 9, 8, 13)) AS integrantes_ativos,
+			SUM(ord.val_inadimplencia) FILTER (WHERE ci.fl_ativo IS TRUE AND ci.nu_status NOT IN (11, 9, 8, 13, 15)) AS total_inadimplencia,
+			COUNT(ci.id_integrante) FILTER (WHERE ci.fl_ativo IS TRUE AND ci.nu_status NOT IN (11, 9, 8, 13, 15) AND ord.flag_inadimplente = 1) AS total_inadimplentes,
+			SUM(ord.val_pagos) FILTER (WHERE ci.nu_status NOT IN (11, 9, 8, 13)) AS tt_pagos,
+			COUNT(ci.id_integrante) FILTER (WHERE ci.fl_ativo IS TRUE AND ci.nu_status NOT IN (10, 11, 9, 8, 13, 14) AND ord.qtde_pagos_q3 = 0 AND ord.flag_vencido_30d_q3 = 1) AS nunca_pagaram,
+			SUM(ord.val_total_ordens) FILTER (WHERE ci.fl_ativo IS TRUE AND ci.nu_status NOT IN (10, 11, 9, 8, 13, 14) AND ord.qtde_pagos_q3 = 0 AND ord.flag_vencido_30d_q3 = 1) AS vl_nunca_pagaram,
+			SUM(fin.total_deb_futuros) FILTER (WHERE ci.fl_ativo IS TRUE AND ci.nu_status NOT IN (11, 9, 8, 13)) AS parc_deb_futuros,
+			COUNT(ci.id_integrante) FILTER (WHERE ci.fl_ativo IS TRUE AND ci.nu_status NOT IN (11, 9, 8, 13) AND fin.total_deb_futuros > 0) AS integrantes_endividados,
+			SUM(fin.total_deb_futuros) FILTER (WHERE ci.fl_ativo IS TRUE AND ci.nu_status NOT IN (11, 9, 8, 13, 15) AND ord.qtde_pagos_q7 = 0 AND ord.flag_vencido_30d_q7 = 1) AS end_nuca_pagaram,
+			COUNT(ci.id_integrante) FILTER (WHERE ci.fl_ativo IS TRUE AND ci.nu_status NOT IN (11, 9, 8, 13, 15) AND ord.qtde_pagos_q7 = 0 AND ord.flag_vencido_30d_q7 = 1 AND fin.total_deb_futuros > 0) AS deb_nunca_pagaram
 		FROM
 			cte_integrantes ci
 			LEFT JOIN cte_ordem ord ON ci.id_integrante = ord.integrante_id
@@ -249,93 +159,39 @@ def obter_dados(limit: int = 5000, offset: int = 0):
 		GROUP BY
 			ci.fundo_id
 	)
-	-- 6. RELATÓRIO FINAL ORGANIZADO
 SELECT
-	CASE
-		WHEN u.nm_unidade = 'Campos' THEN 'Itaperuna Muriae'
-		ELSE u.nm_unidade
-	END AS nm_unidade,
-	f.id AS id_fundo,
-	f.nm_fundo,
-	c.nm_curso AS curso_fundo,
-	CASE f.tp_servico
-		WHEN '1' THEN 'Pacote'
-		WHEN '2' THEN 'Assessoria'
-		WHEN '3' THEN 'Super Integrada'
-	END AS tp_servico,
-	CASE f.situacao
-		WHEN 1 THEN 'Não mapeado'
-		WHEN 2 THEN 'Mapeado'
-		WHEN 3 THEN 'Em negociação'
-		WHEN 4 THEN 'Concorrente'
-		WHEN 5 THEN 'Comum'
-		WHEN 6 THEN 'Juntando'
-		WHEN 7 THEN 'Junção'
-		WHEN 8 THEN 'Unificando'
-		WHEN 9 THEN 'Unificado'
-		WHEN 10 THEN 'Rescindindo'
-		WHEN 11 THEN 'Rescindido'
-		WHEN 12 THEN 'Realizado'
-		WHEN 13 THEN 'Desistente'
-		WHEN 14 THEN 'Pendente'
-	END AS situacao_fundo,
-	CASE f.tipocliente_id
-		WHEN '7' THEN 'EMPRESARIAL'
-		WHEN '14' THEN 'FRANQUIAS'
-		WHEN '15' THEN 'FUNDO DE FORMATURA'
-		WHEN '16' THEN 'OUTROS'
-	END AS tipo_cliente_fundo,
+	u.nm_unidade, f.id AS id_fundo, f.nm_fundo, c.nm_curso AS curso_fundo,
+	CASE f.tp_servico WHEN '1' THEN 'Pacote' WHEN '2' THEN 'Assessoria' WHEN '3' THEN 'Super Integrada' END AS tp_servico,
+	CASE f.situacao WHEN 1 THEN 'Não mapeado' WHEN 2 THEN 'Mapeado' WHEN 3 THEN 'Em negociação' WHEN 4 THEN 'Concorrente' WHEN 5 THEN 'Comum' WHEN 6 THEN 'Juntando' WHEN 7 THEN 'Junção' WHEN 8 THEN 'Unificando' WHEN 9 THEN 'Unificado' WHEN 10 THEN 'Rescindindo' WHEN 11 THEN 'Rescindido' WHEN 12 THEN 'Realizado' WHEN 13 THEN 'Desistente' WHEN 14 THEN 'Pendente' END AS situacao_fundo,
+	CASE f.tipocliente_id WHEN '7' THEN 'EMPRESARIAL' WHEN '14' THEN 'FRANQUIAS' WHEN '15' THEN 'FUNDO DE FORMATURA' WHEN '16' THEN 'OUTROS' END AS tipo_cliente_fundo,
 	u_relac.nome AS consultor_relacionamento,
-	CASE
-		WHEN f.dt_contrato IS NULL
-		OR f.dt_contrato > f.dt_cadastro THEN f.dt_cadastro
-		ELSE f.dt_contrato
-	END AS dt_contrato_fundo,
-	f.dt_cadastro,
-	f.dt_baile,
+	CASE WHEN f.dt_contrato IS NULL OR f.dt_contrato > f.dt_cadastro THEN f.dt_cadastro ELSE f.dt_contrato END AS dt_contrato_fundo,
+	f.dt_cadastro, f.dt_baile,
 	COALESCE(m.total_inadimplencia, 0) AS total_inadimplencia,
 	COALESCE(m.total_inadimplentes, 0) AS total_inadimplentes,
 	COALESCE(m.integrantes_ativos, 0) AS integrantes_ativos,
 	COALESCE(m.nunca_pagaram, 0) AS nunca_pagaram,
-	-- Regra condicional solicitada: se endividados = 0, traz inadimplentes
-	CASE
-		WHEN COALESCE(m.integrantes_endividados, 0) = 0 THEN COALESCE(m.total_inadimplentes, 0)
-		ELSE m.integrantes_endividados
-	END AS integrantes_endividados,
+	CASE WHEN COALESCE(m.integrantes_endividados, 0) = 0 THEN COALESCE(m.total_inadimplentes, 0) ELSE m.integrantes_endividados END AS integrantes_endividados,
 	COALESCE(m.parc_deb_futuros, 0) AS parc_deb_futuross,
 	COALESCE(m.tt_pagos, 0) AS tt_pagos,
-	NULL AS fundo_venda_pos, -- Coluna em branco (não mapeada nas consultas originais)
+	NULL AS fundo_venda_pos,
 	f.vl_orcamento_contrato AS maf_atual,
-	CASE f.tp_curso
-		WHEN 1 THEN 'Ens Médio'
-		WHEN 2 THEN 'Segundo grau'
-		WHEN 3 THEN 'Técnico'
-		WHEN 4 THEN 'Graduação'
-		WHEN 5 THEN 'Outros'
-		WHEN 6 THEN 'Tecnólogo'
-		WHEN 7 THEN 'Militar'
-		WHEN 8 THEN 'Colação'
-	END AS tp_curso,
-	NULL AS cluster_raiox, -- Coluna em branco
+	CASE f.tp_curso WHEN 1 THEN 'Ens Médio' WHEN 2 THEN 'Segundo grau' WHEN 3 THEN 'Técnico' WHEN 4 THEN 'Graduação' WHEN 5 THEN 'Outros' WHEN 6 THEN 'Tecnólogo' WHEN 7 THEN 'Militar' WHEN 8 THEN 'Colação' END AS tp_curso,
+	NULL AS cluster_raiox,
 	COALESCE(m.vl_nunca_pagaram, 0) AS vl_nunca_pagaram,
 	COALESCE(m.end_nuca_pagaram, 0) AS end_nuca_pagaram,
 	COALESCE(m.deb_nunca_pagaram, 0) AS deb_nunca_pagaram,
-	u_atend.nome AS atendimento,
-	u_prod.nome AS producao,
-	u_plan.nome AS planejamento
+	u_atend.nome AS atendimento, u_prod.nome AS producao, u_plan.nome AS planejamento
 FROM
 	cte_fundos f
 	JOIN tb_unidade u ON u.id = f.unidade_id
 	JOIN tb_curso c ON c.id = f.curso_id
-	LEFT JOIN tb_usuario u_relac ON u_relac.id = f.consultorplanejamento_id
-	AND u_relac.enabled IS TRUE
+	LEFT JOIN tb_usuario u_relac ON u_relac.id = f.consultorplanejamento_id AND u_relac.enabled IS TRUE
 	LEFT JOIN tb_usuario u_atend ON u_atend.id = f.consultoratendimento_id
 	LEFT JOIN tb_usuario u_prod ON u_prod.id = f.consultorproducao_id
 	LEFT JOIN tb_usuario u_plan ON u_plan.id = f.consultorplanejamento_id
 	LEFT JOIN cte_metricas m ON m.fundo_id = f.id
-ORDER BY
-	nm_unidade,
-	f.nm_fundo
+ORDER BY nm_unidade, f.nm_fundo
 LIMIT %s OFFSET %s
             """
             cursor.execute(query, (limit, offset))
